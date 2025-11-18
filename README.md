@@ -4,124 +4,54 @@ Proof-of-Concept and Advisory for Simple Cafe Ordering System XSS
 # Vulnerability Advisory & Exploit
 
 ## Affected Version
-
- Employee Profile Management System 
+Simple Cafe Ordering System (version details not provided)
 
 ---
 
 ## Vulnerability Type
-
-SQL Injection — Multiple Endpoints (per_id, dept_id, term, etc.)
-
-   edit_personnel.php (parameter per_id)
-
-   view_personnel.php (parameter per_id)
-
-   print_personnel_report.php (parameter term)
-
-   file_table.php (parameter term)
-
-   delete_department.php (parameter dept_id)
-
-   delete_personnel.php (parameter per_id)
-
-   delete_position.php (likely position ID parameter)
-
-   delete_rank.php (likely rank ID parameter)
+Cross-Site Scripting (XSS) - Reflected XSS
 
 ---
 
 ## Advisory (Recommendations)
 
-### Use Parameterized Queries Properly
+### Sanitize Output
+Use functions like `htmlspecialchars()` to encode output and prevent executing HTML or JavaScript code.
 
-The application uses **PDO::prepare()** but still concatenates user-controlled parameters into SQL strings. Replace all patterns like:
-      
-      $sql = "SELECT * FROM personnel WHERE per_id = ".$_GET['per_id'];
-      $stmt = $pdo->prepare($sql);
+### Input Validation
+Validate user inputs rigorously for allowed characters and patterns, particularly in critical fields like product names and user names.
 
+### Content Security Policy (CSP)
+Apply a strict Content Security Policy to prevent the execution of unauthorized scripts.
 
-with safe parameter binding:
+### Escaping Dynamic Content
+Ensure that dynamic content, such as images and user data (e.g., `$_SESSION['SESS_FIRST_NAME']`), is always sanitized before rendering on the page.
 
-      $stmt = $pdo->prepare("SELECT * FROM personnel WHERE per_id = :id");
-      $stmt->execute([':id' => $_GET['per_id']]);
-
-### Validate All External Input
-
-   Enforce integer-only checks for per_id, dept_id, position_id, rank_id.
-
-   Whitelist allowed term formats (e.g., YYYY-S).
+### Use Secure Headers
+Ensure proper HTTP headers are set, such as `X-XSS-Protection` and `X-Content-Type-Options`.
 
 ---
 
 ## Proof-of-Concept (Exploit)
 
-**Exploit Steps**
+### Exploit Steps:
 
-### Intercept Request
-Use Burp Suite, Fiddler, or browser dev tools to capture requests sent to vulnerable scripts:
+1. **Intercept HTTP Request**
+   Use a proxy tool like Burp Suite or Fiddler to intercept the HTTP request.
 
-   view_personnel.php
+2. **Modify Payload**
+   Inject a malicious JavaScript payload in the input fields (e.g., product name, username) in the POST request.
    
-   edit_personnel.php
-   
-   file_table.php
-   
-   print_personnel_report.php
-   
-   delete_department.php, delete_personnel.php, delete_position.php, delete_rank.php
+**Example payload:**
+     
+     "><script>alert('XSS Vulnerability Exploit');</script>
 
-### Modify Parameters
-Inject a SQL payload inside per_id, dept_id, or term.
-Example injection payload (simple boolean-based):
+3. **Submit the Modified Request**
+   Modify and forward the request to the server. When the page is rendered, the injected JavaScript will execute in the context of the other user’s browser.
 
-         1' OR '1'='1--
+4. **Verify Impact:**
+   Ensure the injected script runs on the victim’s browser, indicating a successful XSS attack.
 
-
-### Submit Modified Request
-   Forward the injected request to the server.
-
-### Observe Behavior
-
-   Data pages (view/edit/report) will return all rows instead of one.
-   
-   Delete pages may delete entire tables if unprotected.
-   
-   SQL errors may reveal DB structure, confirming injection.
-
-## Example PoC Payloads 
-### 1. Data Extraction — **view_personnel.php**
-
-**Request**:
-
-      GET /employee_profile/view_personnel.php?per_id=1' OR '1'='1-- 
-
-
-**Effect**:
-Displays information for multiple personnel records.
-
-### 2. Data Extraction — print_personnel_report.php
-
-**Request**:
-
-      GET /employee_profile/print_personnel_report.php?term=2024-1' OR '1'='1-- 
-
-
-**Effect**:
-Returns reports for all terms instead of one.
-
-### 3. Destructive Injection — delete_department.php
-
-For testing on local instance only.
-
-**Request**:
-
-      GET /employee_profile/delete_department.php?dept_id=0 OR 1=1-- 
-
-
-**Effect**:
-Deletes all rows in the departments table.
-
-### 4. Using sqlmap (Optional Automated Exploit)
-      sqlmap -u "http://localhost/employee_profile/view_personnel.php?per_id=1" \
-        -p per_id --dbs
+**Example Payload:**
+    
+    "><script>alert('XSS Vulnerability Exploit');</script>
